@@ -58,6 +58,10 @@ void preempt_thread(uint64_t vtid) {
     tracepoint(sched_rt, thread_preempt, vtid);
 }
 
+void suspend_thread(uint64_t vtid) {
+    tracepoint(sched_rt, thread_suspend, vtid);
+}
+
 void run_thread(uint64_t vtid, int cpu_id) {
     tracepoint(sched_rt, thread_run, vtid, cpu_id);
 }
@@ -188,7 +192,7 @@ void* task_function(void* arg) {
         auto now = std::chrono::high_resolution_clock::now();
 
         if (now < next_release) {
-	    preempt_thread(pthread_self());
+	    suspend_thread(pthread_self());
             // log suspension
             {
 	    	std::stringstream ss;

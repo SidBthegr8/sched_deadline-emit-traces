@@ -43,6 +43,15 @@ TRACEPOINT_EVENT(
 
 TRACEPOINT_EVENT(
     sched_rt,
+    thread_suspend,
+    TP_ARGS(unsigned int, vtid),
+    TP_FIELDS(
+        ctf_integer(unsigned int, vtid, vtid)
+    )
+)
+
+TRACEPOINT_EVENT(
+    sched_rt,
     thread_run,
     TP_ARGS(unsigned int, vtid, int, cpu_id),
     TP_FIELDS(
