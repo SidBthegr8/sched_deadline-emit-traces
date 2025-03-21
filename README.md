@@ -23,19 +23,25 @@ git clone https://github.com/SidBthegr8/sched_deadline-emit-traces.git
 cd sched_deadline-emit-traces
 git checkout lttng
 ```
+
 ### Compiling the code:
 ```
 gcc  -c -I. tracepoint_provider.c -o tracepoint_provider.o -lttng-ust
 g++ -o simulate_tasks simulate_tasks.cpp tracepoint_provider.o -llttng-ust -ldl -lpthread
 ```
+
+### Running simulate_tasks.cpp
+```
+usage: sudo ./simulate_tasks <taskset_file> <runtime_seconds> [emit logs] [num_cores]
+
+Note: sudo is required in order to run SCHED_DEADLINE
+```
+
 ### Running lttng:
 ```
 sudo lttng create my_session
-
 sudo lttng enable-event -u 'task_proc:*'
-
 sudo lttng enable-event -u 'sched_rt:*'
-
 sudo lttng start
 sudo ./simulate_tasks taskset.txt 5 > temp
 sudo lttng stop

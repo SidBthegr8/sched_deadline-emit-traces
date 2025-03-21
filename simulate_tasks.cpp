@@ -250,7 +250,7 @@ std::vector<Task> parse_input_file(const std::string& filename) {
 
 int main(int argc, char* argv[]) {
     if (argc < 3 || argc > 5) {
-        std::cerr << "usage: " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores]" << std::endl;
+        std::cerr << "usage: sudo " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores]" << std::endl;
         return 1;
     }
 
