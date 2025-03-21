@@ -34,7 +34,7 @@ g++ -o simulate_tasks simulate_tasks.cpp tracepoint_provider.o -llttng-ust -ldl 
 ```
 usage: sudo ./simulate_tasks <taskset_file> <runtime_seconds> [emit logs] [num_cores]
 
-Note: sudo is required in order to run SCHED_DEADLINE
+###Note: sudo is required in order to run SCHED_DEADLINE
 ```
 
 ### Running lttng:
