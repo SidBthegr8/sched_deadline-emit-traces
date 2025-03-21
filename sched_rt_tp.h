@@ -26,27 +26,27 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     sched_rt,
     job_release_recv,
-    TP_ARGS(int, vtid),
+    TP_ARGS(unsigned int, vtid),
     TP_FIELDS(
-        ctf_integer(int, vtid, vtid)
+        ctf_integer(unsigned int, vtid, vtid)
     )
 )
 
 TRACEPOINT_EVENT(
     sched_rt,
     thread_preempt,
-    TP_ARGS(int, vtid),
+    TP_ARGS(unsigned int, vtid),
     TP_FIELDS(
-        ctf_integer(int, vtid, vtid)
+        ctf_integer(unsigned int, vtid, vtid)
     )
 )
 
 TRACEPOINT_EVENT(
     sched_rt,
     thread_run,
-    TP_ARGS(int, vtid, int, cpu_id),
+    TP_ARGS(unsigned int, vtid, int, cpu_id),
     TP_FIELDS(
-        ctf_integer(int, vtid, vtid)
+        ctf_integer(unsigned int, vtid, vtid)
         ctf_integer(int, cpu_id, cpu_id)
     )
 )
@@ -54,9 +54,9 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     sched_rt,
     deadline_overrun,
-    TP_ARGS(int, vtid),
+    TP_ARGS(unsigned int, vtid),
     TP_FIELDS(
-        ctf_integer(int, vtid, vtid)
+        ctf_integer(unsigned int, vtid, vtid)
     )
 )
 

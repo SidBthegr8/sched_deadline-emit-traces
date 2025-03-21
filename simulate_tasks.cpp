@@ -50,19 +50,20 @@ void end_scheduling() {
     tracepoint(sched_rt, sched_end);
 }
 
-void receive_job_release(int vtid) {
+void receive_job_release(uint64_t vtid) {
+    std::cout<<"vtid: "<<vtid<<"\n";
     tracepoint(sched_rt, job_release_recv, vtid);
 }
 
-void preempt_thread(int vtid) {
+void preempt_thread(uint64_t vtid) {
     tracepoint(sched_rt, thread_preempt, vtid);
 }
 
-void run_thread(int vtid, int cpu_id) {
+void run_thread(uint64_t vtid, int cpu_id) {
     tracepoint(sched_rt, thread_run, vtid, cpu_id);
 }
 
-void deadline_overrun(int vtid) {
+void deadline_overrun(uint64_t vtid) {
     tracepoint(sched_rt, deadline_overrun, vtid);
 }
 
