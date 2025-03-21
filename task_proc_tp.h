@@ -30,8 +30,10 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     task_proc,
     job_release,
-    TP_ARGS(),
-    TP_FIELDS()
+    TP_ARGS(unsigned int, vtid),
+    TP_FIELDS(
+        ctf_integer(unsigned int, vtid, vtid)
+    )
 )
 
 TRACEPOINT_EVENT(

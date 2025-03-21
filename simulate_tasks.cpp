@@ -30,8 +30,8 @@ void init_task(float period, float deadline, float wcet) {
     tracepoint(task_proc, task_init, period, deadline, wcet);
 }
 
-void release_job() {
-    tracepoint(task_proc, job_release);
+void release_job(uint64_t vtid) {
+    tracepoint(task_proc, job_release, vtid);
 }
 
 void complete_job() {
@@ -172,7 +172,7 @@ void* task_function(void* arg) {
     while (should_continue.load()) {
         auto job_start = std::chrono::high_resolution_clock::now();
         long long current_job_id = ++threadArg->job_id;
-	release_job();
+	release_job(pthread_self());
 	receive_job_release(pthread_self());
 	run_thread(pthread_self());
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
