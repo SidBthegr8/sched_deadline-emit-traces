@@ -16,6 +16,55 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include "task_proc_tp.h"
+#include "sched_rt_tp.h"
+#include <lttng/tracepoint.h>
+
+// In your task program
+void init_taskset() {
+    tracepoint(task_proc, taskset_init);
+}
+
+void init_task(int period, int deadline, int wcet) {
+    tracepoint(task_proc, task_init, period, deadline, wcet);
+}
+
+void release_job() {
+    tracepoint(task_proc, job_release);
+}
+
+void complete_job() {
+    tracepoint(task_proc, job_completion);
+}
+
+void kill_threads() {
+    tracepoint(task_proc, kill_threads);
+}
+
+// In your scheduler
+void begin_scheduling() {
+    tracepoint(sched_rt, sched_begin);
+}
+
+void end_scheduling() {
+    tracepoint(sched_rt, sched_end);
+}
+
+void receive_job_release(int vtid) {
+    tracepoint(sched_rt, job_release_recv, vtid);
+}
+
+void preempt_thread(int vtid) {
+    tracepoint(sched_rt, thread_preempt, vtid);
+}
+
+void run_thread(int vtid, int cpu_id) {
+    tracepoint(sched_rt, thread_run, vtid, cpu_id);
+}
+
+void deadline_overrun(int vtid) {
+    tracepoint(sched_rt, deadline_overrun, vtid);
+}
 
 
 struct LogMessage {
@@ -205,7 +254,7 @@ int main(int argc, char* argv[]) {
 
     sleep(2);
     global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
-    log_message("All tasks released at 0 us\n");
+    log_message("All tasks are released at 0 us\n");
     pthread_rwlock_unlock(&rwlock);
 
     should_continue.store(true);
