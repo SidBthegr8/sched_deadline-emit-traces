@@ -87,6 +87,7 @@ void log_message(const std::string& msg) {
 
 
 std::chrono::high_resolution_clock::time_point global_start_time;
+bool verbose=0;
 
 // Manually define sched_attr if necessary
 struct sched_attr {
@@ -174,9 +175,9 @@ void* task_function(void* arg) {
 	release_job();
 	receive_job_release(pthread_self());
 	run_thread(pthread_self(), threadArg->cpu_id);
-        // log job start
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
-        {
+        if(verbose){
+        	// log job start
 		std::stringstream ss;
 		ss << "job (" << task.task_set << ", " << current_job_id << ") started at " 
         	          << elapsed.count() << " us" << std::endl;
@@ -193,8 +194,8 @@ void* task_function(void* arg) {
         auto job_end = std::chrono::high_resolution_clock::now();
         elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_end - global_start_time);
 
-        // log job completion
-	{
+	if(verbose) {
+		// log job completion
 		std::stringstream ss;
 		ss << "job (" << task.task_set << ", " << current_job_id << ") completed at "
         	          << elapsed.count() << " us" << std::endl;
@@ -205,18 +206,18 @@ void* task_function(void* arg) {
 
         if (now < next_release) {
 	    suspend_thread(pthread_self());
-            // log suspension
-            {
+            if(verbose) {
+	    	// log suspension
 	    	std::stringstream ss;
 	    	ss <<  "job (" << task.task_set << ", " << current_job_id << ") suspended at "
                           << elapsed.count() << " us" << std::endl;
             	log_message(ss.str());
 	    }
 	    std::this_thread::sleep_until(next_release);
-            // log resumption
             now = std::chrono::high_resolution_clock::now();
             elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - global_start_time);
-	    {
+	    if(verbose) {
+            	// log resumption
 	    	std::stringstream ss;
 	    	ss << "job (" << task.task_set << ", " << current_job_id << ") resumed at "
                           << elapsed.count()  << " us" << std::endl;
@@ -248,15 +249,16 @@ std::vector<Task> parse_input_file(const std::string& filename) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3 || argc > 4) {
-        std::cerr << "usage: " << argv[0] << " <taskset_file> <runtime_seconds> [num_cores]" << std::endl;
+    if (argc < 3 || argc > 5) {
+        std::cerr << "usage: " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores]" << std::endl;
         return 1;
     }
 
     std::vector<Task> tasks = parse_input_file(argv[1]);
     init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
-    int num_cores = (argc == 4) ? std::stoi(argv[3]) : 1; // Default to 1 if not specified
+    verbose = (argc == 4) ? std::stoi(argv[3]) : 0;
+    int num_cores = (argc == 5) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
 
     pthread_rwlock_wrlock(&rwlock);
     
@@ -275,7 +277,9 @@ int main(int argc, char* argv[]) {
 
     sleep(2);
     global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
-    log_message("All tasks are released at 0 us\n");
+    if(verbose) {
+    	log_message("All tasks are released at 0 us\n");
+    }
     pthread_rwlock_unlock(&rwlock);
     
     begin_scheduling();
@@ -290,12 +294,14 @@ int main(int argc, char* argv[]) {
         pthread_join(threads[i], NULL);
     }
     kill_threads();
-    // Print collected log messages
-    while (!log_queue.empty()) {
-        const auto& log = log_queue.front();
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(log.timestamp - global_start_time);
-        std::cout << "[" << elapsed.count() << " us] " << log.message;
-        log_queue.pop();
+    if(verbose) {
+    	// Print collected log messages
+    	while (!log_queue.empty()) {
+    	    const auto& log = log_queue.front();
+    	    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(log.timestamp - global_start_time);
+    	    std::cout << "[" << elapsed.count() << " us] " << log.message;
+    	    log_queue.pop();
+    	}
     }
 
     return 0;
