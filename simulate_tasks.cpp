@@ -146,8 +146,8 @@ void* task_function(void* arg) {
     attr.size = sizeof(attr);
     attr.sched_policy = SCHED_DEADLINE;
     attr.sched_runtime = static_cast<uint64_t>(task.wcet * 1e6);
-    attr.sched_deadline = task.deadline * 1e6;
-    attr.sched_period = task.period * 1e6;
+    attr.sched_deadline = static_cast<uint64_t>(task.deadline * 1e6);
+    attr.sched_period = static_cast<uint64_t>(task.period * 1e6);
 
     if (sched_setattr(0, &attr, 0) < 0) {
         std::cerr << "failed to SCHED_DEADLINE: " << strerror(errno) << std::endl;
