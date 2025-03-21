@@ -19,11 +19,11 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     task_proc,
     task_init,
-    TP_ARGS(int, period, int, deadline, int, wcet),
+    TP_ARGS(float, period, float, deadline, float, wcet),
     TP_FIELDS(
-        ctf_integer(int, period, period)
-        ctf_integer(int, deadline, deadline)
-        ctf_integer(int, wcet, wcet)
+        ctf_float(float, period, period)
+        ctf_float(float, deadline, deadline)
+        ctf_float(float, wcet, wcet)
     )
 )
 

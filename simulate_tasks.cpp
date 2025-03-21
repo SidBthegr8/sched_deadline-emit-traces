@@ -25,7 +25,7 @@ void init_taskset() {
     tracepoint(task_proc, taskset_init);
 }
 
-void init_task(int period, int deadline, int wcet) {
+void init_task(float period, float deadline, float wcet) {
     tracepoint(task_proc, task_init, period, deadline, wcet);
 }
 
@@ -101,8 +101,8 @@ struct sched_attr {
 
 struct Task {
     int task_set;
-    int period;
-    int deadline;
+    float period;
+    float deadline;
     float wcet;
 };
 
@@ -184,7 +184,7 @@ void* task_function(void* arg) {
         	          << elapsed.count() << " us" << std::endl;
 		log_message(ss.str());
         }
-	auto next_release = job_start + std::chrono::microseconds(task.period * 1000);
+	auto next_release = job_start + std::chrono::microseconds((int)task.period * 1000);
         auto now = std::chrono::high_resolution_clock::now();
 
         if (now < next_release) {
