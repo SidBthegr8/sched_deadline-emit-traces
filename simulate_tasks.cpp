@@ -19,6 +19,7 @@
 #include <lttng/tracepoint.h>
 #include "task_proc_tp.h"
 #include "sched_rt_tp.h"
+#include <csignal>
 
 // In your task program
 void init_taskset() {
@@ -114,6 +115,11 @@ static int sched_setattr(pid_t pid, struct sched_attr *attr, unsigned int flags)
     return syscall(SYS_sched_setattr, pid, attr, flags);
 }
 
+void sigxcpu_handler(int signum) {
+    deadline_overrun(pthread_self());
+    std::cout << "Thread " << pthread_self() << " exceeded its runtime" << std::endl;
+}
+
 struct ThreadArg {
     Task task;
     std::atomic<long long> job_id{0};
@@ -152,6 +158,7 @@ void* task_function(void* arg) {
     attr.sched_runtime = static_cast<uint64_t>(task.wcet * 1e6);
     attr.sched_deadline = static_cast<uint64_t>(task.deadline * 1e6);
     attr.sched_period = static_cast<uint64_t>(task.period * 1e6);
+    attr.sched_flags = SCHED_FLAG_DL_OVERRUN;
 
     if (sched_setattr(0, &attr, 0) < 0) {
         std::cerr << "failed to SCHED_DEADLINE: " << strerror(errno) << std::endl;
@@ -175,7 +182,12 @@ void* task_function(void* arg) {
         	          << elapsed.count() << " us" << std::endl;
 		log_message(ss.str());
 	}
+	auto execution_start = std::chrono::high_resolution_clock::now();
         usleep(static_cast<int>(task.wcet * 1000));
+	auto execution_end = std::chrono::high_resolution_clock::now();
+	if (execution_end - execution_start > std::chrono::microseconds(static_cast<int>(task.wcet * 1000))) {
+            preempt_thread(pthread_self());
+        }
 	complete_job();
 	
         auto job_end = std::chrono::high_resolution_clock::now();
@@ -247,6 +259,8 @@ int main(int argc, char* argv[]) {
     int num_cores = (argc == 4) ? std::stoi(argv[3]) : 1; // Default to 1 if not specified
 
     pthread_rwlock_wrlock(&rwlock);
+    
+    signal(SIGXCPU, sigxcpu_handler);
 
     std::vector<pthread_t> threads(tasks.size());
     std::vector<ThreadArg> threadargs(tasks.size());
