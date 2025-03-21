@@ -98,9 +98,6 @@ struct sched_attr {
 #ifndef SYS_sched_setattr
 #define SYS_sched_setattr 314 // System call number for x86_64
 #endif
-int sched_setattr(pid_t pid, const struct sched_attr *attr, unsigned int flags) {
-    return syscall(SYS_sched_setattr, pid, attr, flags);
-}
 
 struct Task {
     int task_set;
