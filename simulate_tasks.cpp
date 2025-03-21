@@ -16,9 +16,9 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include <lttng/tracepoint.h>
 #include "task_proc_tp.h"
 #include "sched_rt_tp.h"
-#include <lttng/tracepoint.h>
 
 // In your task program
 void init_taskset() {
@@ -153,7 +153,7 @@ void* task_function(void* arg) {
     attr.sched_period = task.period * 1e6;
 
     if (sched_setattr(0, &attr, 0) < 0) {
-        std::cerr << "failed to set sched_dEADLINE: " << strerror(errno) << std::endl;
+        std::cerr << "failed to SCHED_DEADLINE: " << strerror(errno) << std::endl;
         pthread_exit(NULL);
     }
 
@@ -163,7 +163,9 @@ void* task_function(void* arg) {
     while (should_continue.load()) {
         auto job_start = std::chrono::high_resolution_clock::now();
         long long current_job_id = ++threadArg->job_id;
-
+	release_job();
+	receive_job_release(pthread_self());
+	run_thread(pthread_self(), threadArg->cpu_id);
         // log job start
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
         {
@@ -173,7 +175,8 @@ void* task_function(void* arg) {
 		log_message(ss.str());
 	}
         usleep(static_cast<int>(task.wcet * 1000));
-
+	complete_job();
+	
         auto job_end = std::chrono::high_resolution_clock::now();
         elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_end - global_start_time);
 
@@ -188,6 +191,7 @@ void* task_function(void* arg) {
         auto now = std::chrono::high_resolution_clock::now();
 
         if (now < next_release) {
+	    preempt_thread(pthread_self());
             // log suspension
             {
 	    	std::stringstream ss;
@@ -237,6 +241,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::vector<Task> tasks = parse_input_file(argv[1]);
+    init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
     int num_cores = (argc == 4) ? std::stoi(argv[3]) : 1; // Default to 1 if not specified
 
@@ -249,6 +254,7 @@ int main(int argc, char* argv[]) {
         threadargs[i].task = tasks[i];
         threadargs[i].job_id = 0;
         threadargs[i].cpu_id = (num_cores > 1) ? (i % num_cores) : -1;
+	init_task(tasks[i].period, tasks[i].deadline, tasks[i].wcet);
         pthread_create(&threads[i], NULL, task_function, &threadargs[i]);
     }
 
@@ -256,17 +262,19 @@ int main(int argc, char* argv[]) {
     global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
     log_message("All tasks are released at 0 us\n");
     pthread_rwlock_unlock(&rwlock);
-
+    
+    begin_scheduling();
     should_continue.store(true);
 
     sleep(runtime_seconds);
     
     should_continue.store(false);
-
+    end_scheduling();
+    
     for (size_t i = 0; i < threads.size(); i++) {
         pthread_join(threads[i], NULL);
     }
-
+    kill_threads();
     // Print collected log messages
     while (!log_queue.empty()) {
         const auto& log = log_queue.front();
