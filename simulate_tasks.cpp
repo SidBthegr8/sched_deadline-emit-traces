@@ -63,8 +63,8 @@ void suspend_thread(uint64_t vtid) {
     tracepoint(sched_rt, thread_suspend, vtid);
 }
 
-void run_thread(uint64_t vtid, int cpu_id) {
-    tracepoint(sched_rt, thread_run, vtid, cpu_id);
+void run_thread(uint64_t vtid) {
+    tracepoint(sched_rt, thread_run, vtid);
 }
 
 void deadline_overrun(uint64_t vtid) {
@@ -174,7 +174,7 @@ void* task_function(void* arg) {
         long long current_job_id = ++threadArg->job_id;
 	release_job();
 	receive_job_release(pthread_self());
-	run_thread(pthread_self(), threadArg->cpu_id);
+	run_thread(pthread_self());
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
         if(verbose){
         	// log job start
