@@ -11,25 +11,25 @@ Before you begin, ensure you have the following installed on your system:
 - lttng-ust development library
 
 ## Installing LTTng and Libraries
+```sh
 
 
 sudo apt-get update
 sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev build-essential
 sudo apt install babeltrace2
 
-## Cloning the Repository
+### Cloning the Repository
 
 git clone https://github.com/SidBthegr8/sched_deadline-emit-traces.git
 cd sched_deadline-emit-traces
 git checkout lttng
 
-## Compiling the code:
+### Compiling the code:
 
 gcc  -c -I. tracepoint_provider.c -o tracepoint_provider.o -lttng-ust
 g++ -o simulate_tasks simulate_tasks.cpp tracepoint_provider.o -llttng-ust -ldl -lpthread
 
-## Running lttng:
-```sh
+### Running lttng:
 
 sudo lttng create my_session
 
