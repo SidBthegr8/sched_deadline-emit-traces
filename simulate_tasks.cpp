@@ -51,7 +51,6 @@ void end_scheduling() {
 }
 
 void receive_job_release(uint64_t vtid) {
-    std::cout<<"vtid: "<<vtid<<"\n";
     tracepoint(sched_rt, job_release_recv, vtid);
 }
 
