@@ -19,8 +19,10 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     task_proc,
     task_init,
-    TP_ARGS(float, period, float, deadline, float, wcet),
+    TP_ARGS(pid_t, vpid, pthread_t, vtid, float, period, float, deadline, float, wcet),
     TP_FIELDS(
+        ctf_integer(pid_t, vpid, vpid)
+        ctf_integer(pthread_t, vtid, vtid)
         ctf_float(float, period, period)
         ctf_float(float, deadline, deadline)
         ctf_float(float, wcet, wcet)
@@ -30,10 +32,8 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     task_proc,
     job_release,
-    TP_ARGS(unsigned int, vtid),
-    TP_FIELDS(
-        ctf_integer(unsigned int, vtid, vtid)
-    )
+    TP_ARGS(),
+    TP_FIELDS()
 )
 
 TRACEPOINT_EVENT(
@@ -46,6 +46,13 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
     task_proc,
     kill_threads,
+    TP_ARGS(),
+    TP_FIELDS()
+)
+
+TRACEPOINT_EVENT(
+    task_proc,
+    deadline_overrun,
     TP_ARGS(),
     TP_FIELDS()
 )

@@ -21,56 +21,32 @@
 #include "sched_rt_tp.h"
 #include <csignal>
 
-// In your task program
-void init_taskset() {
-    tracepoint(task_proc, taskset_init);
-}
+// task process tracepoints
+namespace tp {
+    void init_taskset() {
+        tracepoint(task_proc, taskset_init);
+    }
 
-void init_task(float period, float deadline, float wcet) {
-    tracepoint(task_proc, task_init, period, deadline, wcet);
-}
+    void init_task(pid_t vpid, pthread_t vtid, float period, float deadline, float wcet) {
+        tracepoint(task_proc, task_init, vpid, vtid, period, deadline, wcet);
+    }
 
-void release_job(uint64_t vtid) {
-    tracepoint(task_proc, job_release, vtid);
-}
+    void release_job() {
+        tracepoint(task_proc, job_release);
+    }
 
-void complete_job() {
-    tracepoint(task_proc, job_completion);
-}
+    void complete_job() {
+        tracepoint(task_proc, job_completion);
+    }
 
-void kill_threads() {
-    tracepoint(task_proc, kill_threads);
-}
+    void kill_threads() {
+        tracepoint(task_proc, kill_threads);
+    }
 
-// In your scheduler
-void begin_scheduling() {
-    tracepoint(sched_rt, sched_begin);
+    void deadline_overrun() {
+        tracepoint(task_proc, deadline_overrun);
+    }
 }
-
-void end_scheduling() {
-    tracepoint(sched_rt, sched_end);
-}
-
-void receive_job_release(uint64_t vtid) {
-    tracepoint(sched_rt, job_release_recv, vtid);
-}
-
-void preempt_thread(uint64_t vtid) {
-    tracepoint(sched_rt, thread_preempt, vtid);
-}
-
-void suspend_thread(uint64_t vtid) {
-    tracepoint(sched_rt, thread_suspend, vtid);
-}
-
-void run_thread(uint64_t vtid) {
-    tracepoint(sched_rt, thread_run, vtid);
-}
-
-void deadline_overrun(uint64_t vtid) {
-    tracepoint(sched_rt, deadline_overrun, vtid);
-}
-
 
 struct LogMessage {
     std::chrono::high_resolution_clock::time_point timestamp;
@@ -117,7 +93,7 @@ static int sched_setattr(pid_t pid, struct sched_attr *attr, unsigned int flags)
 }
 
 void sigxcpu_handler(int signum) {
-    deadline_overrun(pthread_self());
+    tp::deadline_overrun();
     std::cout << "Thread " << pthread_self() << " exceeded its runtime" << std::endl;
 }
 
@@ -145,6 +121,7 @@ void* task_function(void* arg) {
     //auto now = std::chrono::high_resolution_clock::now();
     //auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - global_start_time);
     //log_message << "task " << task.task_set << " arrived at " << elapsed.count() << " us" << std::endl;
+    tp::init_task(getpid(), pthread_self(), task.period, task.deadline, task.wcet);
 
     int cpu_id = threadArg->cpu_id;
 
@@ -172,9 +149,7 @@ void* task_function(void* arg) {
     while (should_continue.load()) {
         auto job_start = std::chrono::high_resolution_clock::now();
         long long current_job_id = ++threadArg->job_id;
-	release_job(pthread_self());
-	receive_job_release(pthread_self());
-	run_thread(pthread_self());
+        tp::release_job();
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
         if(verbose){
         	// log job start
@@ -184,15 +159,17 @@ void* task_function(void* arg) {
 		log_message(ss.str());
 	}
 	auto execution_start = std::chrono::high_resolution_clock::now();
-        usleep(static_cast<int>(task.wcet * 1000));
+    usleep(static_cast<int>(task.wcet * 1000));
 	auto execution_end = std::chrono::high_resolution_clock::now();
+    /*
 	if (execution_end - execution_start > std::chrono::microseconds(static_cast<int>(task.wcet * 1000))) {
-            preempt_thread(pthread_self());
-        }
-	complete_job();
-	
-        auto job_end = std::chrono::high_resolution_clock::now();
-        elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_end - global_start_time);
+        preempt_thread(pthread_self());
+    }
+    */
+	tp::complete_job();
+
+    auto job_end = std::chrono::high_resolution_clock::now();
+    elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_end - global_start_time);
 
 	if(verbose) {
 		// log job completion
@@ -200,30 +177,29 @@ void* task_function(void* arg) {
 		ss << "job (" << task.task_set << ", " << current_job_id << ") completed at "
         	          << elapsed.count() << " us" << std::endl;
 		log_message(ss.str());
-        }
+    }
 	auto next_release = job_start + std::chrono::microseconds((int)task.period * 1000);
         auto now = std::chrono::high_resolution_clock::now();
 
         if (now < next_release) {
-	    suspend_thread(pthread_self());
             if(verbose) {
-	    	// log suspension
-	    	std::stringstream ss;
-	    	ss <<  "job (" << task.task_set << ", " << current_job_id << ") suspended at "
-                          << elapsed.count() << " us" << std::endl;
-            	log_message(ss.str());
-	    }
-	    std::this_thread::sleep_until(next_release);
-            now = std::chrono::high_resolution_clock::now();
-            elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - global_start_time);
-	    if(verbose) {
-            	// log resumption
-	    	std::stringstream ss;
-	    	ss << "job (" << task.task_set << ", " << current_job_id << ") resumed at "
-                          << elapsed.count()  << " us" << std::endl;
-            	log_message(ss.str());
-	    }
-	}
+                // log suspension
+                std::stringstream ss;
+                ss <<  "job (" << task.task_set << ", " << current_job_id << ") suspended at "
+                            << elapsed.count() << " us" << std::endl;
+                    log_message(ss.str());
+            }
+            std::this_thread::sleep_until(next_release);
+                now = std::chrono::high_resolution_clock::now();
+                elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - global_start_time);
+            if(verbose) {
+                    // log resumption
+                std::stringstream ss;
+                ss << "job (" << task.task_set << ", " << current_job_id << ") resumed at "
+                            << elapsed.count()  << " us" << std::endl;
+                    log_message(ss.str());
+            }
+        }
     }
 
     pthread_exit(NULL);
@@ -255,7 +231,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::vector<Task> tasks = parse_input_file(argv[1]);
-    init_taskset();
+    tp::init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
     verbose = (argc == 4) ? std::stoi(argv[3]) : 0;
     int num_cores = (argc == 5) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
@@ -271,30 +247,28 @@ int main(int argc, char* argv[]) {
         threadargs[i].task = tasks[i];
         threadargs[i].job_id = 0;
         threadargs[i].cpu_id = (num_cores > 1) ? (i % num_cores) : -1;
-	init_task(tasks[i].period, tasks[i].deadline, tasks[i].wcet);
         pthread_create(&threads[i], NULL, task_function, &threadargs[i]);
     }
 
     sleep(2);
     global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
-    if(verbose) {
+    if (verbose) {
     	log_message("All tasks are released at 0 us\n");
     }
     pthread_rwlock_unlock(&rwlock);
     
-    begin_scheduling();
     should_continue.store(true);
 
     sleep(runtime_seconds);
     
     should_continue.store(false);
-    end_scheduling();
     
     for (size_t i = 0; i < threads.size(); i++) {
         pthread_join(threads[i], NULL);
     }
-    kill_threads();
-    if(verbose) {
+    tp::kill_threads();
+
+    if (verbose) {
     	// Print collected log messages
     	while (!log_queue.empty()) {
     	    const auto& log = log_queue.front();
