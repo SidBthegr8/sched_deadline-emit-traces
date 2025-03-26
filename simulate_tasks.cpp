@@ -94,7 +94,7 @@ static int sched_setattr(pid_t pid, struct sched_attr *attr, unsigned int flags)
 
 void sigxcpu_handler(int signum) {
     tp::deadline_overrun();
-    std::cout << "Thread " << pthread_self() << " exceeded its runtime" << std::endl;
+    std::cout << "Thread " << gettid() << " exceeded its runtime" << std::endl;
 }
 
 struct ThreadArg {
@@ -110,7 +110,7 @@ void set_cpu_affinity(int cpu_id) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpu_id, &cpuset);
-    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    pthread_setaffinity_np(gettid(), sizeof(cpu_set_t), &cpuset);
 }
 
 void* task_function(void* arg) {
@@ -121,7 +121,7 @@ void* task_function(void* arg) {
     //auto now = std::chrono::high_resolution_clock::now();
     //auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - global_start_time);
     //log_message << "task " << task.task_set << " arrived at " << elapsed.count() << " us" << std::endl;
-    tp::init_task(getpid(), pthread_self(), task.period, task.deadline, task.wcet);
+    tp::init_task(getpid(), gettid(), task.period, task.deadline, task.wcet);
 
     int cpu_id = threadArg->cpu_id;
 
@@ -163,7 +163,7 @@ void* task_function(void* arg) {
 	auto execution_end = std::chrono::high_resolution_clock::now();
     /*
 	if (execution_end - execution_start > std::chrono::microseconds(static_cast<int>(task.wcet * 1000))) {
-        preempt_thread(pthread_self());
+        preempt_thread(gettid());
     }
     */
 	tp::complete_job();
