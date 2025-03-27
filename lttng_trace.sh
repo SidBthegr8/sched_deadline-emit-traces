@@ -1,4 +1,4 @@
-[ -d trace ] && sudo rm -rf lttng_trace
+[ -d lttng_trace ] && sudo rm -rf lttng_trace
 sudo lttng destroy sched_trace
 sudo lttng create sched_trace --output lttng_trace
 sudo lttng enable-event -u 'task_proc:*'
