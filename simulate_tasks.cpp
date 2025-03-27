@@ -149,7 +149,6 @@ void* task_function(void* arg) {
     while (should_continue.load()) {
         auto job_start = std::chrono::high_resolution_clock::now();
         long long current_job_id = ++threadArg->job_id;
-        tp::release_job(getpid(), gettid());
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
         if (verbose){
         	// log job start
@@ -159,7 +158,8 @@ void* task_function(void* arg) {
             log_message(ss.str());
 	    }
 
-        uint64_t cap = (uint64_t)(5759000.f * 0.36764705882 * task.wcet);
+        uint64_t cap = (uint64_t)(2705000.f * task.wcet);
+        tp::release_job(getpid(), gettid());
         for (volatile uint64_t i = 0; i < cap; ++i);
         tp::complete_job(getpid(), gettid());
 
@@ -245,8 +245,8 @@ int main(int argc, char* argv[]) {
         threadargs[i].cpu_id = (num_cores > 1) ? (i % num_cores) : -1;
         pthread_create(&threads[i], NULL, task_function, &threadargs[i]);
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    sleep(2);
     global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
     if (verbose) {
     	log_message("All tasks are released at 0 us\n");
