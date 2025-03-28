@@ -1,0 +1,5 @@
+taskset_short.txt
+temp
+simulate_tasks
+tracepoint_provider.o
+lttng_trace
