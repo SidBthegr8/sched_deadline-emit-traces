@@ -41,7 +41,8 @@ usage: sudo ./simulate_tasks <taskset_file> <runtime_seconds> [emit logs] [num_c
 ```
 sudo lttng create my_session
 sudo lttng enable-event -u 'task_proc:*'
-sudo lttng enable-event -u 'sched_rt:*'
+sudo lttng enable-event -k 'sched*'
+sudo lttng enable-event -k 'x86_irq_vectors_reschedule*'
 sudo lttng start
 sudo ./simulate_tasks taskset.txt 5 > temp
 sudo lttng stop
