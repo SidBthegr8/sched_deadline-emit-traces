@@ -94,7 +94,9 @@ static int sched_setattr(pid_t pid, struct sched_attr *attr, unsigned int flags)
 
 void sigxcpu_handler(int signum) {
     tp::overrun_deadline(getpid(), gettid());
+    if (verbose) {
     std::cout << "Thread " << gettid() << " exceeded its runtime" << std::endl;
+    }
 }
 
 struct ThreadArg {
