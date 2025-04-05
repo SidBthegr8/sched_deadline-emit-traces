@@ -21,6 +21,7 @@
 #include "sched_rt_tp.h"
 #include <csignal>
 #include <ctime>
+#include <unistd.h>
 
 // set true if using SCHED_DEADLINE and false if using SCHED_EXT with custom EDF scheduler
 // needed due to SCHED_DEADLINE utilizing SCHED_YIELD to wait until next period
@@ -172,6 +173,9 @@ void* task_function(void* arg) {
     auto next_release = global_start_time + period;
 
     while (should_continue.load()) {
+    	int cpu = sched_getcpu();
+
+    	std::cout << "Current thread is running on CPU: " << cpu << std::endl;
         auto job_start = std::chrono::high_resolution_clock::now();
         long long current_job_id = ++threadArg->job_id;
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(job_start - global_start_time);
