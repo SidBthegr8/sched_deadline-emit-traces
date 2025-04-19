@@ -1,3 +1,5 @@
+TARGET_CPUS="2,3"
+
 [ -d lttng_trace ] && sudo rm -rf lttng_trace
 sudo lttng destroy sched_trace
 sudo lttng create sched_trace --output lttng_trace
@@ -37,7 +39,19 @@ sudo lttng enable-event -k --function=switched_to_dl switched_to_dl
 sudo lttng enable-event -k --function=update_curr_dl update_curr_dl
 sudo lttng enable-event -k --function=task_is_throttled_dl task_is_throttled_dl
 sudo lttng start
-sudo ./simulate_tasks taskset.txt 5 0 > temp
+echo "$TARGET_CPUS" | sudo tee "/sys/fs/cgroup/cpuset/cpuset.cpus"
+# PEP=$(cat /proc/sys/kernel/perf_event_paranoid)
+# sudo sysctl -w kernel.perf_event_paranoid=0
+# sudo setcap cap_sys_nice=eip ./simulate_tasks
+sudo ./simulate_tasks taskset.txt 5 > temp &
+PID=$!
+echo $PID | sudo tee /sys/fs/cgroup/cpuset/cpuset.procs
+taskset -p $PID
+# echo $PID | sudo tee "/sys/fs/cgroup/edf_group/cgroup.procs"
+cat "/sys/fs/cgroup/cpuset/cpuset.cpus"
+wait $PID
+# sudo sysctl -w kernel.perf_event_paranoid=$PEP
+echo "" | sudo tee "/sys/fs/cgroup/cpuset/cpuset.cpus"
 sudo lttng stop
 # sudo lttng view
 sudo lttng destroy sched_trace

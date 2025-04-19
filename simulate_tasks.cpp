@@ -253,6 +253,12 @@ int main(int argc, char* argv[]) {
     verbose = (argc == 4) ? std::stoi(argv[3]) : 0;
     int num_cores = (argc == 5) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
 
+    // cpu_set_t cpuset;
+    // CPU_ZERO(&cpuset);
+    // CPU_SET(2, &cpuset);
+    // CPU_SET(3, &cpuset);
+    // sched_setaffinity(0, sizeof(cpuset), &cpuset);
+
     pthread_rwlock_wrlock(&rwlock);
     
     signal(SIGXCPU, sigxcpu_handler);
