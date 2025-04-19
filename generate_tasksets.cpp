@@ -1,11 +1,16 @@
-#include "taskgen.h"
+#include "generate_tasksets.h"
 
 #include <set>
 #include <vector>
 #include <cmath>
 #include <cassert>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <string>
 
+namespace fs = std::filesystem;
 std::default_random_engine TaskSetGenerator::gen;
 
 TaskSet TaskSetGenerator::genModifiedKraemer(int precision, Fraction util, int task_count, int min_period, int max_period) {
@@ -111,4 +116,57 @@ TaskSet TaskSetGenerator::genUUniFastDiscard(int precision, Fraction util, int t
     std::shuffle(task_set.begin(), task_set.end(), gen); // done to ensure bumps are sufficiently random
 
     return task_set;
+}
+
+int main(int argc, char **argv) {
+    // argument parsing
+    // arg[1] = number of tasksets
+    // arg[2] = tasks per taskset
+    // arg[3] = utilization
+    if (argc < 4 || argc > 7) {
+        std::cerr << "usage: " << argv[0] << " <number of tasksets> <tasks per taskset> <taskset utilization> [min period (ms) (default 200)] [max period (ms) (default 1000)] [output path (default ./generated_tasksets.txt)]" << std::endl;
+        return 1;
+    }
+    uint32_t nsets = std::stoul(argv[1]);
+    uint32_t ntasks = std::stoul(argv[2]);
+    Fraction util;
+    {
+        std::string util_str = argv[3];
+        size_t dec = util_str.find('.');
+        int64_t num = dec == std::string::npos ? std::stoll(util_str) : std::stoll(util_str.substr(0, dec-1) + util_str.substr(dec+1));
+        int64_t den = 1;
+        if (dec != std::string::npos) {
+            for (size_t i = dec+1; i < util_str.size(); ++i) {
+                den *= 10;
+            }
+        }
+        util = Fraction(num, den);
+    }
+    uint64_t min_period = argc > 4 ? std::stoull(argv[4]) : 200;
+    uint64_t max_period = argc > 5 ? std::stoull(argv[5]) : 1000;
+    if (min_period > max_period) {
+        std::cerr << "min period > max period" << std::endl;
+        return 1;
+    }
+    std::string output_path = argc > 6 ? argv[6] : "./generated_tasksets.txt";
+    std::cout << "Generating " << nsets << " random tasksets containing " << ntasks << " tasks with a total utilization of " << *util << " and a period within " << min_period << "-" << max_period << "ms" << std::endl;
+
+    const int64_t NS_PER_SEC = 1000000000;
+    const int64_t NS_PER_MS = 1000000;
+    const int64_t MS_PER_SEC = 1000;
+
+    // generate tasksets
+    std::ofstream output;
+    output.open(output_path);
+    for (int i = 0; i < nsets; ++i) {
+        // generate taskset using ms as time unit with ns precision
+        TaskSet task_set = TaskSetGenerator::genModifiedKraemer(NS_PER_MS, util, ntasks, min_period, max_period);
+
+        // output to file
+        for (const Task &task : task_set) {
+            output << "(" << i << "," << *task.period << "," << *task.relative_deadline << "," << *task.wcet << ")\n";
+        }
+    }
+    output.close();
+    std::cout << "Output written to " << output_path << std::endl;
 }

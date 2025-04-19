@@ -1,8 +1,17 @@
-#include "model.h"
-#include <random>
+#include "fraction.h"
 
-#ifndef TASKGEN_H
-#define TASKGEN_H
+#include <random>
+#include <vector>
+
+struct Task {
+    Fraction phase, period, wcet, relative_deadline;
+    Task(Fraction phase, Fraction period, Fraction wcet, Fraction relative_deadline) : phase(phase), period(period), wcet(wcet), relative_deadline(relative_deadline) {}
+    Task() : Task(0, 0, 0, 0) {}
+    Task(Fraction period, Fraction wcet, Fraction relative_deadline) : Task(0, period, wcet, relative_deadline) {}
+    Task(Fraction period, Fraction wcet) : Task(0, period, wcet, period) {}
+};
+
+using TaskSet = std::vector<Task>;
 
 struct TaskSetGenerator {
     static std::default_random_engine gen;
@@ -21,5 +30,3 @@ struct TaskSetGenerator {
 
     // both genURPartition and genUUniFastDiscard should be indistinguishable, but genUUniFastDiscard is the formalized method
 };
-
-#endif

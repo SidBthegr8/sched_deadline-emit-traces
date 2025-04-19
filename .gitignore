@@ -1,5 +1,7 @@
 taskset_short.txt
 temp
 simulate_tasks
+generate_tasksets
+generated_tasksets.txt
 tracepoint_provider.o
 lttng_trace
