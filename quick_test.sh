@@ -3,8 +3,8 @@ user=$(whoami)
 sh build.sh || exit
 [ -d lttng_trace_dl ] && rm -rf lttng_trace_dl
 [ -d lttng_trace_scx ] && rm -rf lttng_trace_scx
-[ -d lttng_trace_dl ] && rm -rf parse_output_dl
-[ -d lttng_trace_scx ] && rm -rf parse_output_scx
+[ -d parse_output_dl ] && rm -rf parse_output_dl
+[ -d parse_output_scx ] && rm -rf parse_output_scx
 
 # trace
 sudo sh lttng_trace.sh dl
