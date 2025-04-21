@@ -2,4 +2,5 @@ taskset_short.txt
 temp
 simulate_tasks
 tracepoint_provider.o
-lttng_trace
+lttng_trace_*
+parse_output_*
