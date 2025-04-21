@@ -22,9 +22,9 @@
 #include <csignal>
 #include <ctime>
 
-// set true if using SCHED_DEADLINE and false if using SCHED_EXT with custom EDF scheduler
-// needed due to SCHED_DEADLINE utilizing SCHED_YIELD to wait until next period
-# define USING_SCHED_DEADLINE 1
+#define SCHED_EXT 7
+#define FIFO_PATH "/tmp/pure-edf"
+#define ACK_PATH "/tmp/pure-edf-ack"
 
 // task process tracepoints
 namespace tp {
@@ -73,6 +73,9 @@ void log_message(Parts... parts) {
 
 std::chrono::high_resolution_clock::time_point global_start_time;
 bool verbose=0;
+int sched_type=0;
+#define SCX 0
+#define DL 1
 
 // Manually define sched_attr if necessary
 struct sched_attr {
@@ -84,6 +87,12 @@ struct sched_attr {
     uint64_t sched_runtime;
     uint64_t sched_deadline;
     uint64_t sched_period;
+};
+
+// sched_ext attributes
+struct attr_struct {
+    pid_t pid;
+    uint64_t abs_deadline;
 };
 
 #ifndef SYS_sched_setattr
@@ -101,6 +110,8 @@ static int sched_setattr(pid_t pid, struct sched_attr *attr, unsigned int flags)
     return syscall(SYS_sched_setattr, pid, attr, flags);
 }
 
+// sched_deadline overrun handler
+// note: the signal is only sent to the overrunning thread
 void sigxcpu_handler(int signum) {
     tp::overrun_deadline(getpid(), gettid());
     if (verbose) {
@@ -154,7 +165,7 @@ void* task_function(void* arg) {
     struct sched_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.size = sizeof(attr);
-    attr.sched_policy = SCHED_DEADLINE;
+    attr.sched_policy = sched_type == DL ? SCHED_DEADLINE : SCHED_EXT;
     attr.sched_runtime = static_cast<uint64_t>(task.wcet * 1e6);
     attr.sched_deadline = static_cast<uint64_t>(task.deadline * 1e6);
     attr.sched_period = static_cast<uint64_t>(task.period * 1e6);
@@ -166,10 +177,28 @@ void* task_function(void* arg) {
         pthread_exit(NULL);
     }
 
+    int scx_fd;
+    int scx_fd_ack;
+    if (sched_type == SCX) {
+        scx_fd = open(FIFO_PATH, O_WRONLY | O_CREAT, 0666);
+        scx_fd_ack = open(ACK_PATH, O_RDONLY | O_CREAT, 0622);
+    }
+
     pthread_rwlock_rdlock(&rwlock);
     pthread_rwlock_unlock(&rwlock);
     auto period = std::chrono::microseconds((int)task.period * 1000);
     auto next_release = global_start_time + period;
+
+    auto scx_update_abs_dl = [&](const std::chrono::system_clock::time_point &abs_dl) {
+        if (sched_type != SCX) return;
+        
+        attr_struct edf_attr;
+        edf_attr.pid = getpid();
+        edf_attr.abs_deadline = std::chrono::duration_cast<std::chrono::nanoseconds>(abs_dl.time_since_epoch()).count();
+        write(scx_fd, &edf_attr, sizeof(edf_attr));
+        read(scx_fd_ack, &edf_attr, sizeof(edf_attr));
+    };
+    scx_update_abs_dl(next_release);
 
     while (should_continue.load()) {
         auto job_start = std::chrono::high_resolution_clock::now();
@@ -203,12 +232,18 @@ void* task_function(void* arg) {
             log_message("job (", task.task_set, ", ", current_job_id, ") suspended at ", elapsed.count(), "us\n");
         }
         
-        #if USING_SCHED_DEADLINE
-        sched_yield();
-        #else
-        timespec ts = tp2ts(next_release);
-        clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts, nullptr);
-        #endif
+        if (sched_type == SCX) {
+            timespec ts = tp2ts(next_release);
+            if (next_release < std::chrono::high_resolution_clock::now()) {
+                tp::overrun_deadline(getpid(), gettid());
+            }
+            std::this_thread::sleep_until(next_release); // note: if next_release <= now, this does nothing (need to account for this in tracing)
+            // clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts, nullptr); // behaves weirdly with the sched_ext scheduler (CLOCK_MONOTONIC_RAW doesn't sleep at all, CLOCK_MONOTONIC sleeps forever)
+            next_release += period;
+            scx_update_abs_dl(next_release);
+        } else if (sched_type == DL) {
+            sched_yield();
+        }
 
         if (verbose) {
             auto now = std::chrono::high_resolution_clock::now();
@@ -242,17 +277,18 @@ std::vector<Task> parse_input_file(const std::string& filename) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3 || argc > 5) {
-        std::cerr << "usage: sudo " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores]" << std::endl;
+    if (argc < 3 || argc > 6) {
+        std::cerr << "usage: sudo " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores] [scheduler_type (0=sched_ext, 1=sched_deadline)]" << std::endl;
         return 1;
     }
-
+    
     std::vector<Task> tasks = parse_input_file(argv[1]);
     tp::init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
-    verbose = (argc == 4) ? std::stoi(argv[3]) : 0;
-    int num_cores = (argc == 5) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
-
+    verbose = (argc > 3) ? std::stoi(argv[3]) : 0;
+    int num_cores = (argc > 4) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
+    sched_type = argc > 5 ? std::stoi(argv[5]) : SCX;
+    
     // cpu_set_t cpuset;
     // CPU_ZERO(&cpuset);
     // CPU_SET(2, &cpuset);
