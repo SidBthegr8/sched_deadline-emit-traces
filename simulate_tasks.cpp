@@ -273,75 +273,77 @@ void* task_function(void* arg) {
     pthread_exit(NULL);
 }
 
-std::vector<Task> parse_input_file(const std::string& filename) {
+std::vector<std::vector<Task>> parse_input_file(const std::string& filename, int num_tasksets) {
     std::ifstream file(filename);
-    std::vector<Task> tasks;
+    std::vector<std::vector<Task>> tasksets(num_tasksets);
     std::string line;
-    int task_id = 1;
 
     while (getline(file, line)) {
-        if (line[0] == '(') {
-            std::istringstream ss(line.substr(1, line.size() - 2));
-            Task task;
-            char comma;
-            ss >> task.task_set >> comma >> task.period >> comma >> task.deadline >> comma >> task.wcet;
-            task.task_set = task_id++;  // Assign task ID based on line number
-            tasks.push_back(task);
+        if (line.empty() || line[0] != '(') continue;
+
+        std::istringstream ss(line.substr(1, line.size() - 2)); // remove '(' and ')'
+        Task task;
+        char comma;
+
+        ss >> task.task_set >> comma >> task.period >> comma >> task.deadline >> comma >> task.wcet;
+
+        if (task.task_set < 0 || task.task_set >= num_tasksets) {
+            std::cerr << "Error: task_set " << task.task_set << " is out of bounds for " << num_tasksets << " tasksets.\n";
+            continue;
         }
+
+        tasksets[task.task_set].push_back(task);
     }
-    return tasks;
+
+    return tasksets;
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3 || argc > 6) {
-        std::cerr << "usage: sudo " << argv[0] << " <taskset_file> <runtime_seconds> [emit logs] [num_cores] [scheduler_type (0=sched_ext, 1=sched_deadline)]" << std::endl;
+    if (argc < 4 || argc > 7) {
+        std::cerr << "usage: sudo " << argv[0] << " <taskset_file> <runtime_seconds> <num_tasksets> [emit logs] [num_cores] [sched_type]" << std::endl;
         return 1;
     }
-    
-    std::vector<Task> tasks = parse_input_file(argv[1]);
+    int num_tasksets = std::stoi(argv[3]);
+    std::vector<std::vector<Task>> tasksets = parse_input_file(argv[1], num_tasksets);
     tp::init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
-    verbose = (argc > 3) ? std::stoi(argv[3]) : 0;
-    int num_cores = (argc > 4) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
-    sched_type = argc > 5 ? std::stoi(argv[5]) : SCX_EDF;
-    
-    // cpu_set_t cpuset;
-    // CPU_ZERO(&cpuset);
-    // CPU_SET(2, &cpuset);
-    // CPU_SET(3, &cpuset);
-    // sched_setaffinity(0, sizeof(cpuset), &cpuset);
+    verbose = argc > 4 ? std::stoi(argv[4]) : 0;
+    int num_cores = argc > 5 ? std::stoi(argv[5]) : 1; // Default to 1 if not specified
+    sched_type = argc > 6 ? std::stoi(argv[6]) : SCX_EDF;
+    for (const auto& tasks: tasksets) {	
+    	tp::init_taskset();
+        pthread_rwlock_wrlock(&rwlock);
+        
+        signal(SIGXCPU, sigxcpu_handler);
 
-    pthread_rwlock_wrlock(&rwlock);
-    
-    signal(SIGXCPU, sigxcpu_handler);
+    	std::vector<pthread_t> threads(tasks.size());
+    	std::vector<ThreadArg> threadargs(tasks.size());
 
-    std::vector<pthread_t> threads(tasks.size());
-    std::vector<ThreadArg> threadargs(tasks.size());
+    	for (size_t i = 0; i < tasks.size(); i++) {
+    	    threadargs[i].task = tasks[i];
+    	    threadargs[i].job_id = 0;
+    	    threadargs[i].cpu_id = (num_cores > 1) ? (i % num_cores) : -1;
+    	    pthread_create(&threads[i], NULL, task_function, &threadargs[i]);
+    	}
+    	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    for (size_t i = 0; i < tasks.size(); i++) {
-        threadargs[i].task = tasks[i];
-        threadargs[i].job_id = 0;
-        threadargs[i].cpu_id = (num_cores > 1) ? (i % num_cores) : -1;
-        pthread_create(&threads[i], NULL, task_function, &threadargs[i]);
+    	global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
+    	if (verbose) {
+    		log_message("All tasks are released at 0 us\n");
+    	}
+    	pthread_rwlock_unlock(&rwlock);
+    	
+    	should_continue.store(true);
+
+    	sleep(runtime_seconds);
+    	
+    	should_continue.store(false);
+    	
+    	for (size_t i = 0; i < threads.size(); i++) {
+    	    pthread_join(threads[i], NULL);
+    	}
+    	tp::threads_kill();
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    global_start_time = std::chrono::high_resolution_clock::now(); // Set global start time
-    if (verbose) {
-    	log_message("All tasks are released at 0 us\n");
-    }
-    pthread_rwlock_unlock(&rwlock);
-    
-    should_continue.store(true);
-
-    sleep(runtime_seconds);
-    
-    should_continue.store(false);
-    
-    for (size_t i = 0; i < threads.size(); i++) {
-        pthread_join(threads[i], NULL);
-    }
-    tp::threads_kill();
     
     // Print collected log messages
     while (!log_queue.empty()) {
