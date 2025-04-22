@@ -32,7 +32,7 @@ g++ -o simulate_tasks simulate_tasks.cpp tracepoint_provider.o -llttng-ust -ldl 
 
 ### Running simulate_tasks.cpp
 ```
-usage: sudo ./simulate_tasks <taskset_file> <runtime_seconds> [emit logs] [num_cores]
+usage: sudo ./simulate_tasks <taskset_file> <runtime_seconds> <num_tasksets> [emit logs] [num_cores]
 
 ###Note: sudo is required in order to run SCHED_DEADLINE
 ```
@@ -44,7 +44,7 @@ sudo lttng enable-event -u 'task_proc:*'
 sudo lttng enable-event -k 'sched*'
 sudo lttng enable-event -k 'x86_irq_vectors_reschedule*'
 sudo lttng start
-sudo ./simulate_tasks taskset.txt 5 > temp
+sudo ./simulate_tasks generated_tasksets.txt 5 2 > temp
 sudo lttng stop
 sudo lttng view
 ```
