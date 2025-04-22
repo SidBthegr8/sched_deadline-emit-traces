@@ -5,3 +5,8 @@ generate_tasksets
 generated_tasksets.txt
 tracepoint_provider.o
 lttng_trace
+taskgen
+taskgen.cpp
+taskgen.hpp
+taskgen_bkp.cpp
+temp.cpp
