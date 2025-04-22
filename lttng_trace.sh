@@ -1,6 +1,11 @@
 TARGET_CPUS="2,3"
 TYPE=$1
 
+[ "$TYPE" = "scx_edf" ] && T=0
+[ "$TYPE" = "dl" ] && T=1
+[ "$TYPE" = "scx_simple" ] && T=2
+[ "$TYPE" = "fifo" ] && T=3
+
 [ -d lttng_trace ] && sudo rm -rf lttng_trace
 sudo lttng destroy sched_trace
 sudo lttng create sched_trace --output lttng_trace
@@ -16,14 +21,17 @@ sudo lttng enable-event -k --function=replenish_dl_entity replenish_dl_entity
 # sudo lttng enable-event -k --function=update_curr_dl_se update_curr_dl_se
 sudo lttng enable-event -k 'rcu_utilization'
 
-if [ "$TYPE" = "scx" ]; then
+if [ "$TYPE" = "scx_edf" ] || [ "$TYPE" = "scx_simple" ]; then
   # enable scheduler
-  sudo ../pure-edf/build/scheds/c/scx_edf > /dev/null 2>&1 &
+  if [ "$TYPE" = "scx_edf" ]; then
+    sudo ../pure-edf/build/scheds/c/scx_edf &
+  elif [ "$TYPE" = "scx_simple" ]; then
+    sudo ../pure-edf/build/scheds/c/scx_simple &
+  fi
   SCX_PID=$!
 fi
 
-if [ "$TYPE" = "scx" ]; then
-  T=0
+if [ "$TYPE" = "scx_edf" ] || [ "$TYPE" = "scx_simple" ]; then
   sudo lttng enable-event -k --function=enqueue_task_scx enqueue_task_scx
   sudo lttng enable-event -k --function=dequeue_task_scx dequeue_task_scx
   sudo lttng enable-event -k --function=yield_task_scx yield_task_scx
@@ -46,7 +54,6 @@ if [ "$TYPE" = "scx" ]; then
   sudo lttng enable-event -k --function=prio_changed_scx prio_changed_scx
   sudo lttng enable-event -k --function=update_curr_scx update_curr_scx
 elif [ "$TYPE" = "dl" ]; then
-  T=1
   sudo lttng enable-event -k --function=dl_task_timer dl_task_timer
 
   sudo lttng enable-event -k --function=enqueue_task_dl enqueue_task_dl
@@ -71,8 +78,30 @@ elif [ "$TYPE" = "dl" ]; then
   sudo lttng enable-event -k --function=switched_to_dl switched_to_dl
   sudo lttng enable-event -k --function=update_curr_dl update_curr_dl
   sudo lttng enable-event -k --function=task_is_throttled_dl task_is_throttled_dl
+elif [ "$TYPE" = "fifo" ]; then
+  sudo lttng enable-event -k --function=enqueue_task_rt enqueue_task_rt
+  sudo lttng enable-event -k --function=dequeue_task_rt dequeue_task_rt
+  sudo lttng enable-event -k --function=yield_task_rt yield_task_rt
+  sudo lttng enable-event -k --function=wakeup_preempt_rt wakeup_preempt_rt
+  sudo lttng enable-event -k --function=pick_task_rt pick_task_rt
+  sudo lttng enable-event -k --function=put_prev_task_rt put_prev_task_rt
+  sudo lttng enable-event -k --function=set_next_task_rt set_next_task_rt
+  sudo lttng enable-event -k --function=balance_rt balance_rt
+  sudo lttng enable-event -k --function=select_task_rq_rt select_task_rq_rt
+  sudo lttng enable-event -k --function=set_cpus_allowed_common set_cpus_allowed_common
+  sudo lttng enable-event -k --function=rq_online_rt rq_online_rt
+  sudo lttng enable-event -k --function=rq_offline_rt rq_offline_rt
+  sudo lttng enable-event -k --function=task_woken_rt task_woken_rt
+  sudo lttng enable-event -k --function=switched_from_rt switched_from_rt
+  sudo lttng enable-event -k --function=find_lock_lowest_rq find_lock_lowest_rq
+  sudo lttng enable-event -k --function=task_tick_rt task_tick_rt
+  sudo lttng enable-event -k --function=get_rr_interval_rt get_rr_interval_rt
+  sudo lttng enable-event -k --function=prio_changed_rt prio_changed_rt
+  sudo lttng enable-event -k --function=switched_to_rt switched_to_rt
+  sudo lttng enable-event -k --function=update_curr_rt update_curr_rt
+  sudo lttng enable-event -k --function=task_is_throttled_rt task_is_throttled_rt
 else
-  echo "Invalid scheduler type $TYPE (expected scx or dl)"
+  echo "Invalid scheduler type $TYPE (expected scx_edf, scx_simple, dl, fifo)"
   exit
 fi
 sudo lttng start
@@ -89,10 +118,10 @@ sudo ./simulate_tasks taskset.txt 5 0 0 $T | tee temp
 # cat "/sys/fs/cgroup/cpuset/cpuset.cpus"
 # wait $PID
 # sudo sysctl -w kernel.perf_event_paranoid=$PEP
-echo "" | sudo tee "/sys/fs/cgroup/cpuset/cpuset.cpus"
+# echo "" | sudo tee "/sys/fs/cgroup/cpuset/cpuset.cpus"
 sudo lttng stop
 
-if [ "$TYPE" = "scx" ]; then
+if [ "$TYPE" = "scx_edf" ] || [ "$TYPE" = "scx_simple" ]; then
   # disable scheduler
   kill $SCX_PID
 fi

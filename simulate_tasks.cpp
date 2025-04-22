@@ -74,8 +74,14 @@ void log_message(Parts... parts) {
 std::chrono::high_resolution_clock::time_point global_start_time;
 bool verbose=0;
 int sched_type=0;
-#define SCX 0
+#define SCX_EDF 0
 #define DL 1
+#define SCX_OTHER 2
+#define FIFO 3
+
+// SCX_EDF: pure-edf
+// DL: sched_deadline
+// SCX_OTHER: arbitrary sched_ext scheduler
 
 // Manually define sched_attr if necessary
 struct sched_attr {
@@ -165,11 +171,15 @@ void* task_function(void* arg) {
     struct sched_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.size = sizeof(attr);
-    attr.sched_policy = sched_type == DL ? SCHED_DEADLINE : SCHED_EXT;
-    attr.sched_runtime = static_cast<uint64_t>(task.wcet * 1e6);
-    attr.sched_deadline = static_cast<uint64_t>(task.deadline * 1e6);
-    attr.sched_period = static_cast<uint64_t>(task.period * 1e6);
-    attr.sched_flags = SCHED_FLAG_DL_OVERRUN;
+    attr.sched_policy = sched_type == DL ? SCHED_DEADLINE : sched_type == FIFO ? SCHED_FIFO : SCHED_EXT;
+    if (sched_type == FIFO) {
+        attr.sched_priority = 50;
+    } else if (sched_type == DL) {
+        attr.sched_runtime = static_cast<uint64_t>(task.wcet * 1e6);
+        attr.sched_deadline = static_cast<uint64_t>(task.deadline * 1e6);
+        attr.sched_period = static_cast<uint64_t>(task.period * 1e6);
+        attr.sched_flags = SCHED_FLAG_DL_OVERRUN;
+    }
     uint64_t work_spins = (uint64_t)(2650000.f * task.wcet);
 
     if (sched_setattr(0, &attr, 0) < 0) {
@@ -179,7 +189,7 @@ void* task_function(void* arg) {
 
     int scx_fd;
     int scx_fd_ack;
-    if (sched_type == SCX) {
+    if (sched_type == SCX_EDF) {
         scx_fd = open(FIFO_PATH, O_WRONLY | O_CREAT, 0666);
         scx_fd_ack = open(ACK_PATH, O_RDONLY | O_CREAT, 0622);
     }
@@ -190,7 +200,7 @@ void* task_function(void* arg) {
     auto next_release = global_start_time + period;
 
     auto scx_update_abs_dl = [&](const std::chrono::system_clock::time_point &abs_dl) {
-        if (sched_type != SCX) return;
+        if (sched_type != SCX_EDF) return;
         
         attr_struct edf_attr;
         edf_attr.pid = getpid();
@@ -232,18 +242,24 @@ void* task_function(void* arg) {
             log_message("job (", task.task_set, ", ", current_job_id, ") suspended at ", elapsed.count(), "us\n");
         }
         
-        if (sched_type == SCX) {
+        if (sched_type == DL) {
+            sched_yield();
+        } else if (sched_type == FIFO) {
+            timespec ts = tp2ts(next_release);
+            if (next_release < std::chrono::high_resolution_clock::now()) {
+                tp::overrun_deadline(getpid(), gettid());
+            }
+            std::this_thread::sleep_until(next_release); // note: if next_release <= now, this does nothing (need to account for this in tracing)
+        } else if (sched_type == SCX_EDF || sched_type == SCX_OTHER) {
             timespec ts = tp2ts(next_release);
             if (next_release < std::chrono::high_resolution_clock::now()) {
                 tp::overrun_deadline(getpid(), gettid());
             }
             std::this_thread::sleep_until(next_release); // note: if next_release <= now, this does nothing (need to account for this in tracing)
             // clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts, nullptr); // behaves weirdly with the sched_ext scheduler (CLOCK_MONOTONIC_RAW doesn't sleep at all, CLOCK_MONOTONIC sleeps forever)
-            next_release += period;
-            scx_update_abs_dl(next_release);
-        } else if (sched_type == DL) {
-            sched_yield();
         }
+        next_release += period;
+        scx_update_abs_dl(next_release);
 
         if (verbose) {
             auto now = std::chrono::high_resolution_clock::now();
@@ -287,7 +303,7 @@ int main(int argc, char* argv[]) {
     int runtime_seconds = std::stoi(argv[2]);
     verbose = (argc > 3) ? std::stoi(argv[3]) : 0;
     int num_cores = (argc > 4) ? std::stoi(argv[4]) : 1; // Default to 1 if not specified
-    sched_type = argc > 5 ? std::stoi(argv[5]) : SCX;
+    sched_type = argc > 5 ? std::stoi(argv[5]) : SCX_EDF;
     
     // cpu_set_t cpuset;
     // CPU_ZERO(&cpuset);
