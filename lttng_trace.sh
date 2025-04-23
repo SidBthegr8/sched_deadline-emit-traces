@@ -109,7 +109,7 @@ sudo lttng start
 # PEP=$(cat /proc/sys/kernel/perf_event_paranoid)
 # sudo sysctl -w kernel.perf_event_paranoid=0
 # sudo setcap cap_sys_nice=eip ./simulate_tasks
-sudo ./simulate_tasks taskset.txt 5 0 0 $T | tee temp
+sudo ./simulate_tasks taskset.txt 5 2 0 0 $T | tee temp
 # sudo ./simulate_tasks taskset.txt 5 0 0 $T > temp &
 # PID=$!
 # echo $PID | sudo tee /sys/fs/cgroup/cpuset/cpuset.procs

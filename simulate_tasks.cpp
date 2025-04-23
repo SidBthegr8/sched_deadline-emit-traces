@@ -305,7 +305,6 @@ int main(int argc, char* argv[]) {
     }
     int num_tasksets = std::stoi(argv[3]);
     std::vector<std::vector<Task>> tasksets = parse_input_file(argv[1], num_tasksets);
-    tp::init_taskset();
     int runtime_seconds = std::stoi(argv[2]);
     verbose = argc > 4 ? std::stoi(argv[4]) : 0;
     int num_cores = argc > 5 ? std::stoi(argv[5]) : 1; // Default to 1 if not specified
